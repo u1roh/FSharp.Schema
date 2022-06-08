@@ -1,0 +1,5 @@
+[*.fs]
+indent_size=2
+
+[*.fsx]
+indent_size=2
