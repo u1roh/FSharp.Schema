@@ -26,3 +26,8 @@ Schema.ofSystemType typeof<Hoge>
 |> Schema.toUserDefinedTypes
 |> Seq.map Rust.toRustType
 |> Seq.iter (printfn "%s\n")
+
+Schema.ofSystemType typeof<Hoge>
+|> Schema.toUserDefinedTypes
+|> Seq.map TypeScript.genType
+|> Seq.iter (printfn "%s\n")
