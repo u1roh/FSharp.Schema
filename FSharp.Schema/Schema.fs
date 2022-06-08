@@ -8,16 +8,7 @@ type CustomTypeType =
 
 type Type =
   | BuiltinType of BuiltinType
-  // | Int
-  // | Float
-  // | Bool
-  // | String
-  // | Tuple of Type list // unit if list is empty
-  // | List of Type
-  // | Array of Type
-  // | Option of Type
-  // | Map of Type * Type
-  | Custom of CustomType
+  | UserDefinedType of UserDefinedType
   | Unknown of System.Type
 
 and BuiltinType =
@@ -34,7 +25,7 @@ and BuiltinType =
 
 and TypedItem = { Name: string; Type: Type }
 
-and CustomType =
+and UserDefinedType =
   { SystemType: System.Type
     TypeType: CustomTypeType
     Name: string
@@ -86,7 +77,7 @@ let rec ofSystemType (t: System.Type) =
           { Name = prop.Name
             Type = ofSystemType prop.PropertyType })
         |> Array.toList }
-    |> Custom
+    |> UserDefinedType
   elif FSharpType.IsUnion t then
     { SystemType = t
       TypeType = Union
@@ -102,11 +93,11 @@ let rec ofSystemType (t: System.Type) =
               |> Tuple
               |> BuiltinType })
         |> Array.toList }
-    |> Custom
+    |> UserDefinedType
   else
     Unknown t
 
-let rec toCustomTypes t =
+let rec toUserDefinedTypes t =
   let types =
     match t with
     | BuiltinType t ->
@@ -117,14 +108,14 @@ let rec toCustomTypes t =
       | String -> Seq.empty
       | Option t
       | List t
-      | Array t -> toCustomTypes t
-      | Map (k, v) -> Seq.append (toCustomTypes k) (toCustomTypes v)
-      | Tuple types -> types |> Seq.collect toCustomTypes
-    | Custom t ->
+      | Array t -> toUserDefinedTypes t
+      | Map (k, v) -> Seq.append (toUserDefinedTypes k) (toUserDefinedTypes v)
+      | Tuple types -> types |> Seq.collect toUserDefinedTypes
+    | UserDefinedType t ->
       Seq.singleton t
       |> Seq.append (
         t.Items
-        |> Seq.collect (fun item -> toCustomTypes item.Type)
+        |> Seq.collect (fun item -> toUserDefinedTypes item.Type)
       )
     | Unknown _ -> Seq.empty
 

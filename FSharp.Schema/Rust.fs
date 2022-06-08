@@ -17,7 +17,7 @@ let rec private toRustTypeName t =
     | Schema.Array t -> toRustTypeName t |> sprintf "Vec<%s>"
     | Schema.Option t -> toRustTypeName t |> sprintf "Option<%s>"
     | Schema.Map (k, v) -> sprintf "std::collections::HashMap<%s, %s>" (toRustTypeName k) (toRustTypeName v)
-  | Schema.Custom t -> t.Name
+  | Schema.UserDefinedType t -> t.Name
   | Schema.Unknown _ -> "Unknown"
 
 let rec private isEq t =
@@ -33,7 +33,7 @@ let rec private isEq t =
     | Schema.Array t
     | Schema.Option t -> isEq t
     | Schema.Map (k, v) -> false
-  | Schema.Custom t -> t.Items |> Seq.forall (fun item -> isEq item.Type)
+  | Schema.UserDefinedType t -> t.Items |> Seq.forall (fun item -> isEq item.Type)
   | Schema.Unknown _ -> false
 
 let rec private isCopy t =
@@ -49,18 +49,18 @@ let rec private isCopy t =
     | Schema.Array t -> false
     | Schema.Option t -> isCopy t
     | Schema.Map (k, v) -> false
-  | Schema.Custom t ->
+  | Schema.UserDefinedType t ->
     t.Items
     |> Seq.forall (fun item -> isCopy item.Type)
   | Schema.Unknown _ -> false
 
 let toRustType t =
   "#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]\n"
-  + (if isEq (Schema.Custom t) then
+  + (if isEq (Schema.UserDefinedType t) then
        "#[derive(Eq, Hash, PartialOrd, Ord)]\n"
      else
        "")
-  + (if isCopy (Schema.Custom t) then
+  + (if isCopy (Schema.UserDefinedType t) then
        "#[derive(Copy)]\n"
      else
        "")

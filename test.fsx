@@ -23,6 +23,6 @@ type Hoge = { Name: string; Piyo: Piyo }
 |> printfn "%s"
 
 Schema.ofSystemType typeof<Hoge>
-|> Schema.toCustomTypes
-|> Seq.map Schema.Rust.toRustType
+|> Schema.toUserDefinedTypes
+|> Seq.map Rust.toRustType
 |> Seq.iter (printfn "%s\n")
