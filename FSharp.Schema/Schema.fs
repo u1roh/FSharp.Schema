@@ -7,6 +7,20 @@ type CustomTypeType =
   | Union
 
 type Type =
+  | BuiltinType of BuiltinType
+  // | Int
+  // | Float
+  // | Bool
+  // | String
+  // | Tuple of Type list // unit if list is empty
+  // | List of Type
+  // | Array of Type
+  // | Option of Type
+  // | Map of Type * Type
+  | Custom of CustomType
+  | Unknown of System.Type
+
+and BuiltinType =
   | Int
   | Float
   | Bool
@@ -16,8 +30,7 @@ type Type =
   | Array of Type
   | Option of Type
   | Map of Type * Type
-  | Custom of CustomType
-  | Unknown of System.Type
+
 
 and TypedItem = { Name: string; Type: Type }
 
@@ -39,19 +52,27 @@ let rec ofSystemType (t: System.Type) =
   let contains, found = primitiveTypes.TryGetValue t
 
   if contains then
-    found
+    BuiltinType found
   elif t.IsArray && t.HasElementType then
-    t.GetElementType() |> ofSystemType |> Array
+    t.GetElementType()
+    |> ofSystemType
+    |> Array
+    |> BuiltinType
   elif t.IsGenericType then
     let genericDef = t.GetGenericTypeDefinition()
 
     if genericDef = typeof<list<int>>.GetGenericTypeDefinition () then
-      ofSystemType t.GenericTypeArguments.[0] |> List
+      ofSystemType t.GenericTypeArguments.[0]
+      |> List
+      |> BuiltinType
     elif genericDef = typeof<option<int>>.GetGenericTypeDefinition () then
-      ofSystemType t.GenericTypeArguments.[0] |> Option
+      ofSystemType t.GenericTypeArguments.[0]
+      |> Option
+      |> BuiltinType
     elif genericDef = typeof<Map<int, int>>.GetGenericTypeDefinition () then
       (ofSystemType t.GenericTypeArguments.[0], ofSystemType t.GenericTypeArguments.[1])
       |> Map
+      |> BuiltinType
 
     else
       Unknown t
@@ -78,28 +99,33 @@ let rec ofSystemType (t: System.Type) =
               case.GetFields()
               |> Array.map (fun prop -> ofSystemType prop.PropertyType)
               |> Array.toList
-              |> Tuple })
+              |> Tuple
+              |> BuiltinType })
         |> Array.toList }
     |> Custom
   else
     Unknown t
 
 let rec toCustomTypes t =
-  (match t with
-   | Int
-   | Float
-   | Bool
-   | String
-   | Unknown _ -> Seq.empty
-   | Option t
-   | List t
-   | Array t -> toCustomTypes t
-   | Map (k, v) -> Seq.append (toCustomTypes k) (toCustomTypes v)
-   | Tuple types -> types |> Seq.collect toCustomTypes
-   | Custom t ->
-     Seq.singleton t
-     |> Seq.append (
-       t.Items
-       |> Seq.collect (fun item -> toCustomTypes item.Type)
-     ))
-  |> Seq.distinct
+  let types =
+    match t with
+    | BuiltinType t ->
+      match t with
+      | Int
+      | Float
+      | Bool
+      | String -> Seq.empty
+      | Option t
+      | List t
+      | Array t -> toCustomTypes t
+      | Map (k, v) -> Seq.append (toCustomTypes k) (toCustomTypes v)
+      | Tuple types -> types |> Seq.collect toCustomTypes
+    | Custom t ->
+      Seq.singleton t
+      |> Seq.append (
+        t.Items
+        |> Seq.collect (fun item -> toCustomTypes item.Type)
+      )
+    | Unknown _ -> Seq.empty
+
+  types |> Seq.distinct
