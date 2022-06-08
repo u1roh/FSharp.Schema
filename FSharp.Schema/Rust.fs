@@ -17,7 +17,10 @@ let rec private toRustTypeName t =
     | Schema.Array t -> toRustTypeName t |> sprintf "Vec<%s>"
     | Schema.Option t -> toRustTypeName t |> sprintf "Option<%s>"
     | Schema.Map (k, v) -> sprintf "std::collections::HashMap<%s, %s>" (toRustTypeName k) (toRustTypeName v)
-  | Schema.UserDefinedType t -> t.Name
+  | Schema.UserDefinedType t ->
+    match t with
+    | Schema.RecordType t -> t.RecordName
+    | Schema.UnionType t -> t.UnionName
   | Schema.Unknown _ -> "Unknown"
 
 let rec private isEq t =
@@ -33,7 +36,10 @@ let rec private isEq t =
     | Schema.Array t
     | Schema.Option t -> isEq t
     | Schema.Map (k, v) -> false
-  | Schema.UserDefinedType t -> t.Items |> Seq.forall (fun item -> isEq item.Type)
+  | Schema.UserDefinedType t ->
+    match t with
+    | Schema.RecordType t -> t.Fields |> Seq.forall (fun x -> isEq x.Type)
+    | Schema.UnionType t -> t.Cases |> Seq.forall (fun x -> isEq x.Type)
   | Schema.Unknown _ -> false
 
 let rec private isCopy t =
@@ -50,8 +56,9 @@ let rec private isCopy t =
     | Schema.Option t -> isCopy t
     | Schema.Map (k, v) -> false
   | Schema.UserDefinedType t ->
-    t.Items
-    |> Seq.forall (fun item -> isCopy item.Type)
+    match t with
+    | Schema.RecordType t -> t.Fields |> Seq.forall (fun x -> isCopy x.Type)
+    | Schema.UnionType t -> t.Cases |> Seq.forall (fun x -> isCopy x.Type)
   | Schema.Unknown _ -> false
 
 let toRustType t =
@@ -64,20 +71,20 @@ let toRustType t =
        "#[derive(Copy)]\n"
      else
        "")
-  + match t.TypeType with
-    | Schema.Record ->
-      t.Items
+  + match t with
+    | Schema.RecordType t ->
+      t.Fields
       |> Seq.map (fun item ->
         toRustTypeName item.Type
         |> sprintf "    pub %s: %s,\n" item.Name)
       |> String.concat ""
-      |> sprintf "pub struct %s {\n%s}" t.Name
-    | Schema.Union ->
-      t.Items
+      |> sprintf "pub struct %s {\n%s}" t.RecordName
+    | Schema.UnionType t ->
+      t.Cases
       |> Seq.map (fun item ->
         match item.Type with
         | Schema.BuiltinType (Schema.Tuple []) -> ""
         | t -> toRustTypeName t
         |> sprintf "    %s%s,\n" item.Name)
       |> String.concat ""
-      |> sprintf "pub enum %s {\n%s}" t.Name
+      |> sprintf "pub enum %s {\n%s}" t.UnionName

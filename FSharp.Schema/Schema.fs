@@ -2,10 +2,6 @@ module FSharp.Schema.Schema
 
 open Microsoft.FSharp.Reflection
 
-type CustomTypeType =
-  | Record
-  | Union
-
 type Type =
   | BuiltinType of BuiltinType
   | UserDefinedType of UserDefinedType
@@ -22,14 +18,19 @@ and BuiltinType =
   | Option of Type
   | Map of Type * Type
 
-
-and TypedItem = { Name: string; Type: Type }
-
 and UserDefinedType =
-  { SystemType: System.Type
-    TypeType: CustomTypeType
-    Name: string
-    Items: TypedItem list }
+  | RecordType of RecordType
+  | UnionType of UnionType
+
+and RecordType =
+  { RecordName: string
+    Fields: NameWithType list }
+
+and UnionType =
+  { UnionName: string
+    Cases: NameWithType list }
+
+and NameWithType = { Name: string; Type: Type }
 
 let private primitiveTypes =
   [ typeof<int>, Int
@@ -68,21 +69,18 @@ let rec ofSystemType (t: System.Type) =
     else
       Unknown t
   elif FSharpType.IsRecord t then
-    { SystemType = t
-      TypeType = Record
-      Name = t.Name
-      Items =
+    { RecordName = t.Name
+      Fields =
         FSharpType.GetRecordFields t
         |> Array.map (fun prop ->
           { Name = prop.Name
             Type = ofSystemType prop.PropertyType })
         |> Array.toList }
+    |> RecordType
     |> UserDefinedType
   elif FSharpType.IsUnion t then
-    { SystemType = t
-      TypeType = Union
-      Name = t.Name
-      Items =
+    { UnionName = t.Name
+      Cases =
         FSharpType.GetUnionCases t
         |> Array.map (fun case ->
           { Name = case.Name
@@ -93,6 +91,7 @@ let rec ofSystemType (t: System.Type) =
               |> Tuple
               |> BuiltinType })
         |> Array.toList }
+    |> UnionType
     |> UserDefinedType
   else
     Unknown t
@@ -112,11 +111,19 @@ let rec toUserDefinedTypes t =
       | Map (k, v) -> Seq.append (toUserDefinedTypes k) (toUserDefinedTypes v)
       | Tuple types -> types |> Seq.collect toUserDefinedTypes
     | UserDefinedType t ->
-      Seq.singleton t
-      |> Seq.append (
-        t.Items
-        |> Seq.collect (fun item -> toUserDefinedTypes item.Type)
-      )
+      match t with
+      | RecordType t ->
+        Seq.singleton (RecordType t)
+        |> Seq.append (
+          t.Fields
+          |> Seq.collect (fun item -> toUserDefinedTypes item.Type)
+        )
+      | UnionType t ->
+        Seq.singleton (UnionType t)
+        |> Seq.append (
+          t.Cases
+          |> Seq.collect (fun item -> toUserDefinedTypes item.Type)
+        )
     | Unknown _ -> Seq.empty
 
   types |> Seq.distinct
